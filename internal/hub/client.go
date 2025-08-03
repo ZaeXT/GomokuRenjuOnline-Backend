@@ -2,6 +2,7 @@ package hub
 
 import (
 	"log"
+	"sync"
 	"GomokuRenjuOnline-Backend/pkg/protocol"
 	"github.com/gorilla/websocket"
 )
@@ -12,6 +13,7 @@ type Client struct {
 	room   *Room
 	conn   *websocket.Conn
 	send   chan protocol.OutboundMessage
+	mu     sync.RWMutex
 }
 
 func (c *Client) readPump() {

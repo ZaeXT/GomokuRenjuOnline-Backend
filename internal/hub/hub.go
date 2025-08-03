@@ -3,7 +3,9 @@ package hub
 import (
 	"encoding/json"
 	"log"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"github.com/gorilla/websocket"
 	"GomokuRenjuOnline-Backend/pkg/protocol"
 	"github.com/google/uuid"
@@ -15,6 +17,7 @@ type Hub struct {
 	broadcast  chan messageFromClient
 	register   chan *Client
 	unregister chan *Client
+	destroyRoom chan *Room
 	mu         sync.RWMutex // 保护rooms的并发访问
 }
 
@@ -25,6 +28,7 @@ func NewHub() *Hub {
 		broadcast:  make(chan messageFromClient),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
+		destroyRoom: make(chan *Room),
 	}
 }
 
@@ -37,6 +41,20 @@ func (h *Hub) Run() {
 			h.handleUnregister(client)
 		case msg := <-h.broadcast:
 			h.handleMessage(msg.client, msg.message)
+		
+		case room := <-h.destroyRoom:
+			h.mu.Lock()
+			if _, ok := h.rooms[room.ID]; ok {
+				for client := range room.clients {
+					client.mu.Lock()
+					client.room = nil
+					client.mu.Unlock()
+				}
+				delete(h.rooms, room.ID)
+				log.Printf("Room %s (%s) has been removed from hub, clients unlinked.", room.Name, room.ID)
+			}
+			h.mu.Unlock()
+			h.broadcastRoomList()
 		}
 	}
 }
@@ -54,7 +72,11 @@ func (h *Hub) handleUnregister(client *Client) {
 	if _, ok := h.clients[client]; ok {
 		delete(h.clients, client)
 		if client.room != nil {
-			client.room.unregister <- client
+			if atomic.LoadUint32(&client.room.isClose) == 0 {
+				client.room.unregister <- client
+			} else {
+				log.Printf("Client's room '%s' was already closed. No unregister action needed.", client.room.Name)
+			}
 		}
 	}
 	h.mu.Unlock()
@@ -85,6 +107,25 @@ func (h *Hub) handleMessage(client *Client, msg *protocol.InboundMessage) {
 }
 
 func (h *Hub) handleCreateRoom(client *Client, name string) {
+	trimmedName := strings.TrimSpace(name)
+	if trimmedName == "" {
+		sendError(client, "Room name cannot be empty.")
+		return
+	}
+	var nameExists bool
+	h.mu.RLock()
+	for _, room := range h.rooms {
+		if strings.EqualFold(room.Name, trimmedName) {
+			nameExists = true
+			break
+		}
+	}
+	h.mu.RUnlock()
+	if nameExists {
+		log.Printf("Client at %s failed to create room. Name '%s' already exists.", client.conn.RemoteAddr(), trimmedName)
+		sendError(client, "A room with that name already exists. Please choose another name.")
+		return
+	}
 	h.mu.Lock()
 	roomID := uuid.New().String()
 	room := newRoom(roomID, name, h)

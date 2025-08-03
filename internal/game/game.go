@@ -34,15 +34,15 @@ func (g *Game) AddPlayer(playerID int) {
 	g.Players[playerID] = true
 }
 
-func (g *Game) MakeMove(playerID int, x, y int) error {
+func (g *Game) MakeMove(playerID int, x, y int) (bool,error) {
 	if g.IsGameOver {
-		return errors.New("game is over")
+		return true, errors.New("game is over")
 	}
 	if playerID != g.CurrentPlayer {
-		return errors.New("not your turn")
+		return false, errors.New("not your turn")
 	}
 	if !g.Rule.IsValidMove(g.Board, x, y, playerID) {
-		return errors.New("invalid move")
+		return false, errors.New("invalid move")
 	}
 	movePoint := Point{x, y}
 	g.Board[movePoint] = playerID
@@ -51,11 +51,11 @@ func (g *Game) MakeMove(playerID int, x, y int) error {
 	if state == Win {
 		g.IsGameOver = true
 		g.Winner = &winnerID
-	} else {
-		g.CurrentPlayer = 3 - g.CurrentPlayer
-		g.checkExpansion()
+		return true, nil
 	}
-	return nil
+	g.CurrentPlayer = 3 - g.CurrentPlayer
+	g.checkExpansion()
+	return false, nil
 }
 
 func (g *Game) checkExpansion() {
