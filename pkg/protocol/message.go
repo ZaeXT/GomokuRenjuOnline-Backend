@@ -12,6 +12,9 @@ type OutboundMessage struct {
 	Payload interface{}     `json:"payload"`
 }
 
+type CreateRoomPayload struct {
+	Name string `json:"name"`
+}
 
 type MakeMovePayload struct {
 	X      int `json:"x"`
@@ -19,7 +22,17 @@ type MakeMovePayload struct {
 }
 
 type JoinRoomPayload struct {
-	RoomID string `json:"roomId"`
+	ID string `json:"id"`
+}
+
+type RoomInfo struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	PlayerCount int  `json:"playerCount"`
+}
+
+type RoomListUpdatePayload struct {
+	Rooms []RoomInfo `json:"rooms"`
 }
 
 type Piece struct {
@@ -29,6 +42,7 @@ type Piece struct {
 }
 
 type GameStateUpdatePayload struct {
+	RoomName      string  `json:"roomName"`
 	VisibleSize   int    `json:"visible_size"`
 	Pieces        []Piece `json:"pieces"`
 	CurrentPlayer int  `json:"currentPlayer"`

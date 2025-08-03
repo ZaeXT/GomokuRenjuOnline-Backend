@@ -14,6 +14,8 @@ type messageFromClient struct {
 
 type Room struct {
 	ID          string
+	Name        string
+	hub         *Hub
 	clients     map[*Client]bool
 	game        *game.Game
 	register    chan *Client
@@ -21,10 +23,12 @@ type Room struct {
 	forward     chan messageFromClient
 }
 
-func newRoom(id string) *Room {
+func newRoom(id, name string, hub *Hub) *Room {
 	StandardRule := &game.StandardRule{}
 	return &Room{
 		ID:         id,
+		Name:       name,
+		hub:        hub,
 		clients:    make(map[*Client]bool),
 		game:       game.NewGame(StandardRule),
 		register:   make(chan *Client),
@@ -48,7 +52,7 @@ func (r *Room) Run() {
 
 func (r *Room) handleRegister(client *Client) {
 	if len(r.clients) >= 2 {
-		//r.sendError(client, "Room is full")
+		sendError(client, "Room is full.")
 		return
 	}
 	var assignedId int
@@ -69,12 +73,8 @@ func (r *Room) handleRegister(client *Client) {
 	client.ID = assignedId
 	r.game.AddPlayer(assignedId)
 	log.Printf("Client %d registered to room %s as player %d", client.conn.RemoteAddr(), r.ID, assignedId)
-	if len(r.clients) == 2 {
-		log.Printf("Game starting in room %s", r.ID)
-		r.broadcastGameState()
-	} else {
-		log.Printf("Client %d waiting for another player in room %s", client.ID, r.ID)
-	}
+	r.hub.broadcastRoomList()
+	r.broadcastGameState()
 }
 
 func (r *Room) handleUnregister(client *Client) {
@@ -82,6 +82,7 @@ func (r *Room) handleUnregister(client *Client) {
 		r.game.RemovePlayer(client.ID)
 		delete(r.clients, client)
 		close(client.send)
+		r.hub.broadcastRoomList()
 		log.Printf("Client %d unregistered from room %s", client.ID, r.ID)
 		if !r.game.IsGameOver {
 			r.game.IsGameOver = true
@@ -118,10 +119,10 @@ func (r *Room) handleMessage(client *Client, msg *protocol.InboundMessage) {
 }
 
 func (r *Room) broadcastGameState() {
-	log.Printf("Broadcasting game state to %d clients in room %s", len(r.clients), r.ID)
+	log.Printf("Broadcasting game state for room '%s' to %d clients", r.Name, len(r.clients))
 	for client := range r.clients {
-		payload := r.game.CreateStatePayload(client.ID)
-		log.Printf(" -> Sending to Player %d: yourPlayerId=%d, currentPlayer=%d", client.ID, payload.YourPlayerID, payload.CurrentPlayer)
+		payload := r.game.CreateStatePayload(client.ID,r.Name)
+		log.Printf(" -> Sending to Player %d: roomName=%s, yourPlayerId=%d, currentPlayer=%d", client.ID, payload.RoomName, payload.YourPlayerID, payload.CurrentPlayer)
 		msg := protocol.OutboundMessage{
 			Type:    "GAME_STATE_UPDATE",
 			Payload: payload,

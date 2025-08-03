@@ -79,7 +79,7 @@ func (g *Game) Reset() {
 	g.Winner = nil
 }
 
-func (g *Game) CreateStatePayload(clientID int) protocol.GameStateUpdatePayload {
+func (g *Game) CreateStatePayload(clientID int, roomName string) protocol.GameStateUpdatePayload {
 	pieces := make([]protocol.Piece, 0, len(g.Board))
 	for point, playerID := range g.Board {
 		pieces = append(pieces, protocol.Piece{
@@ -89,6 +89,7 @@ func (g *Game) CreateStatePayload(clientID int) protocol.GameStateUpdatePayload 
 		})
 	}
 	return protocol.GameStateUpdatePayload{
+		RoomName:	roomName,
 		VisibleSize:  g.VisibleSize,
 		Pieces:      pieces,
 		CurrentPlayer: g.CurrentPlayer,

@@ -24,13 +24,13 @@ func (c *Client) readPump() {
 		var msg protocol.InboundMessage
 		err := c.conn.ReadJSON(&msg)
 		if err != nil {
-			log.Printf("error reading json: %v", err)
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("error: %v", err)
+			}
 			break
 		}
-		
-		if c.room != nil {
-			c.room.forward <- messageFromClient{client: c, message: &msg}
-		}
+
+		c.hub.broadcast <- messageFromClient{client: c, message: &msg}
 	}
 }
 
